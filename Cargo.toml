@@ -1,0 +1,20 @@
+[package]
+name = "aces-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "ACES (Arithmetic Channel Encryption Scheme) implementation"
+
+[dependencies]
+num-integer = "0.1.46"
+rand = "0.8"
+rand_distr = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
