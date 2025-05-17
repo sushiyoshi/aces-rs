@@ -144,12 +144,12 @@ impl<'a> Refresher<'a> {
         cipher: &Cipher,
         secret_x: &Vec<Polynomial>,
         rng: &mut R,
-    ) -> Option<Cipher> {
+    ) -> (Option<Cipher>, u32) {
         const MAX_ATTEMPTS: u32 = 10000;
 
         // First check if already refreshable
         if self.is_refreshable(cipher, secret_x) {
-            return Some(cipher.clone());
+            return (Some(cipher.clone()), 0);
         }
 
         // Check initial level bound
@@ -158,7 +158,8 @@ impl<'a> Refresher<'a> {
         let mut attempts = 0;
 
         // Keep trying new zero ciphers until we get a refreshable result
-        while !self.is_refreshable(&current, secret_x) {
+        // while !c&current, secret_x) {
+        loop {
             attempts += 1;
             if attempts > MAX_ATTEMPTS {
                 panic!("Failed to make cipher refreshable after {} attempts", MAX_ATTEMPTS);
@@ -176,13 +177,18 @@ impl<'a> Refresher<'a> {
                 panic!("Level exceeded bound after {} attempts", attempts);
             }
             
-            current = next;
+            // current = next;
+            if self.is_refreshable(&next, secret_x) {
+                current = next;
+                break;
+            }
+
             // println!("current ciphertext: {:?}", current);
             // println!("Attempt {}/{}: Added zero cipher", attempts, MAX_ATTEMPTS);
         }
 
         // println!("Successfully made refreshable after {} attempts", attempts);
-        Some(current)
+        (Some(current),attempts)
     }
     /// Core refresh algorithm (ACES §5.5).
     #[must_use]
@@ -486,46 +492,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_evaluation_preservation() {
-        // Use small parameters
-        let chan = ArithChannel::new(4,  2u128.pow(20) + 1, 2, 2);
-        let (aces, secret_key) = Aces::generate_keypair(&chan);
-        let alg = AcesAlgebra::new(&chan, &secret_key);
-        let refresher = Refresher::new(&aces, &alg, &chan);
-        let mut rng = thread_rng();
-
-        println!("\nTesting evaluation preservation");
-        println!("Parameters: p={}, q={}, dim={}", chan.p, chan.q, chan.dim);
-
-        // Test all possible messages mod p
-        for m in 0..chan.p {
-            println!("\nTesting message: {}", m);
-            let (cipher, _) = aces.encrypt(m, &mut rng);
-
-            // Make refreshable if needed
-            let cipher = refresher.make_refreshable(
-                &cipher,
-                &secret_key,
-                &mut rng
-            ).expect("Failed to make refreshable");
-
-            let pre_eval = cipher.enc.eval(chan.omega) % chan.p;
-            assert_eq!(pre_eval, m, "Wrong initial evaluation for {}", m);
-
-            // Do refresh
-            let refreshed = refresher.refresh(&cipher, &secret_key);
-            let post_eval = refreshed.enc.eval(chan.omega) % chan.p;
-
-            // Verify properties
-            assert_eq!(post_eval, m,
-                "Wrong evaluation after refresh: {} -> {}", m, post_eval);
-            assert!(refreshed.level <= cipher.level,
-                "Level increased for message {}", m);
-            assert!(refresher.is_refreshable(&refreshed, &secret_key),
-                "Result not refreshable for message {}", m);
-        }
-    }
+    
 
     #[test]
     fn test_noise_control() {

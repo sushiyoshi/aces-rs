@@ -4,12 +4,17 @@ use aces_core::{Aces, AcesAlgebra, ArithChannel, Polynomial, Refresher};
 use rand::{Rng, thread_rng};
 use serde::de;
 use std::time::{Duration, Instant};
+use csv::Writer;         
+use std::error::Error;
+fn main() -> Result<(), Box<dyn Error>> {
+    // -------------- 計測用 CSV ライタ --------------
+    let mut wtr = Writer::from_path("mul_stats.csv")?;
+    wtr.write_record(&["index", "time_ms", "zero_adds"])?;
 
-fn main() {
     let max_mults = 10000;
     // Initialize optimal parameters from Python implementation
     let p: u128 = 16;  // small prime
-    let q: u128 = 16_u128.pow(14) + 1; // small prime
+    let q: u128 = 16_u128.pow(15) + 1; // small prime
     let dim = 5;       // optimal polynomial dimension
     let n = 5;         // optimal number of components
 
@@ -69,7 +74,7 @@ fn main() {
         // cur_value = (cur_value + mi) % p;
 
         // decrypt the result
-        let decrypted = aces.decrypt(&cipher, &secret_key);
+        // let decrypted = aces.decrypt(&cipher, &secret_key);
         // println!("Decrypted operations: {}", decrypted);
         // println!("Current value: {}", cur_value);
         // assert_eq!(decrypted, cur_value, "Decryption failed at operation {}", i + 1);
@@ -82,18 +87,21 @@ fn main() {
         let next_level = (cipher.level + initial_level + cipher.level * initial_level) * p;
         let refresh_frag = next_level > noise_max;
 
+        let mut zero_adds = 0;
         // Check if refresh is needed
         let refresher = Refresher::new(&aces, &alg, &chan);
         if refresh_frag {
             // println!("Refresh start");
             if !refresher.is_refreshable(&cipher, &secret_key) {
                 // println!("Making cipher refreshable at operation {}", i + 1);
-                cipher = refresher.make_refreshable(
+                let cipher_tuple = refresher.make_refreshable(
                     &cipher,
                     &secret_key,
                     &mut rng
-                ).expect("Failed to make refreshable");
-                let decrypted = aces.decrypt(&cipher, &secret_key);
+                );
+                cipher = cipher_tuple.0.expect("Failed to make refreshable");
+                zero_adds = cipher_tuple.1;
+                // let decrypted = aces.decrypt(&cipher, &secret_key);
                 // println!("Decrypted after making refreshable: {}", decrypted);
             }
             
@@ -102,7 +110,15 @@ fn main() {
             cipher = refresher.refresh(&cipher, &secret_key);
             refresh_times.push(refresh_start.elapsed());
 
-        }
+            let elapsed_ms = refresh_start.elapsed().as_secs_f64() * 1000.0;
+            println!("Refresh time: {:.6} ms", elapsed_ms);
+            println!("zero_adds: {}", zero_adds);
+            wtr.write_record(&[
+                i.to_string(),
+                format!("{:.6}", elapsed_ms),
+                zero_adds.to_string(),
+            ])?;
+            }
 
         // Verify result
         let decrypted = aces.decrypt(&cipher, &secret_key);
@@ -114,7 +130,7 @@ fn main() {
                 // println!("Refresh successful at operation {}", i + 1);
             }
         } else {
-            // println!("Operation {} failed: expected {}, got {}",i + 1, cur_value, decrypted);
+            println!("Operation {} failed: expected {}, got {}",i + 1, cur_value, decrypted);
             break;
         }
     }
@@ -137,4 +153,6 @@ fn main() {
         println!("Maximum time: {:?}", max_refresh);
         println!("Minimum time: {:?}", min_refresh);
     }
+    wtr.flush()?;           // 忘れずフラッシュ
+    Ok(())
 }
