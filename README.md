@@ -1,6 +1,6 @@
 # aces-rs
 
-Rust implementation of **ACES (Arithmetic Channel Encryption Scheme)**, based on the original Python prototype by Tuyer & Rotaru \[[arXiv:2401.13255](https://arxiv.org/abs/2401.13255)].  This repository targets **research‑grade benchmarking** of ACES on modern x86‑64 CPUs (macOS M2 under Rosetta 2, Intel/AMD Linux, etc.).
+Rust implementation of **ACES (Arithmetic Channel Encryption Scheme)**, based on the original Python prototype by \[[arXiv:2401.13255](https://arxiv.org/abs/2401.13255)].  This repository targets **research‑grade benchmarking** of ACES on modern x86‑64 CPUs (macOS M2 under Rosetta 2, Intel/AMD Linux, etc.).
 
 ---
 
