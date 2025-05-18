@@ -374,11 +374,12 @@ mod tests {
         println!("  Dec(c): {}", aces.decrypt(&cipher, &secret_key));
 
         // Make refreshable if needed
-        let cipher = refresher.make_refreshable(
+        let cip = refresher.make_refreshable(
             &cipher,
             &secret_key,
             &mut rng
-        ).expect("Failed to make refreshable");
+        );
+        let cipher = cip.0.expect("Failed to make refreshable");
 
         // Perform refresh
         let refreshed = refresher.refresh(&cipher, &secret_key);
@@ -448,11 +449,13 @@ mod tests {
             assert_eq!(pre_value, m, "Value changed before refresh");
 
             // Make refreshable if needed
-            cipher = refresher.make_refreshable(
+            let cip = refresher.make_refreshable(
                 &cipher,
                 &secret_key,
                 &mut rng
-            ).expect("Failed to make refreshable");
+            );
+            
+            cipher = cip.0.expect("Failed to make refreshable");
 
             // Do refresh
             cipher = refresher.refresh(&cipher, &secret_key);
