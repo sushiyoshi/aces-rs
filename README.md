@@ -1,6 +1,6 @@
 # aces-rs
 
-Rust implementation of **ACES (Arithmetic Channel Encryption Scheme)**, based on the original Python prototype by \[[arXiv:2401.13255](https://arxiv.org/abs/2401.13255)].  This repository targets **research‑grade benchmarking** of ACES on modern x86‑64 CPUs (macOS M2 under Rosetta 2, Intel/AMD Linux, etc.).
+Rust implementation of **ACES (Arithmetic Channel Encryption Scheme)**, based on the original Python prototype by \[[arXiv:2401.13255](https://arxiv.org/abs/2401.13255)].  This repository targets **research‑grade benchmarking** of ACES.
 
 ---
 
@@ -31,8 +31,7 @@ RUSTFLAGS='-C target-feature=+avx' cargo run --release
 
 ## Benchmark results
 
-All timings collected on a **MacBook Pro 14‑inch (M2 Pro, 12‑core CPU, 32 GB RAM)**
-(Host macOS 14.x; Rust 1.78; default `--release` unless noted).
+All timings collected on a **MacBook Pro 14-inch (M2 Pro, 10-core CPU / 16 GB RAM)**
 
 ### p = 16 (4‑bit modulus)
 
