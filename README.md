@@ -207,15 +207,3 @@ RUSTFLAGS='-C target-feature=+avx' cargo run --release --example quickstart
 
 Developers using `Refresher::is_refreshable` should be aware that it is only a temporary placeholder.
 Use with caution in security-sensitive scenarios.
-
----
-
-## License
-
-`aces-rs` is distributed under the **MIT License**.
-
-Portions of the code are derivative works of the reference Python prototype by  
-Rémy Tuyéras (<https://github.com/remytuyeras/aces>) and are reused here under the
-same MIT terms.  Both copyright notices are included in `LICENSE`, and
-third-party attributions are summarized in `NOTICE`.
-
