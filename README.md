@@ -7,7 +7,6 @@ Rust implementation of **ACES (Arithmetic Channel Encryption Scheme)**, based on
 ## Features
 
 * **Fully typed, idiomatic Rust** (`edition = 2021`)
-* **AVX / SSE optimized** polynomial arithmetic via `RUSTFLAGS=-C target-feature=+avx`
 * Refreshability check and noise tracking helpers
 * CSV benchmark logger for large test campaigns
 * Easy parameter tweaking (`p`, `q`, `dim`, `n`)
