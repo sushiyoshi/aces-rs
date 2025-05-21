@@ -21,10 +21,7 @@ git clone https://github.com/sushiyoshi/aces-rs.git
 cd aces-rs
 
 # debug build
-cargo run
-
-# release build with AVX acceleration
-RUSTFLAGS='-C target-feature=+avx' cargo run --release
+cargo run --release
 ```
 
 ---
@@ -38,14 +35,13 @@ All timings collected on a **MacBook Pro 14-inch (M2 Pro, 10-core CPU / 16 GB RA
 | Build                           | Mul count | Wall‑clock   | Avg refresh  | Max refresh | Min refresh |
 | ------------------------------- | --------- | ------------ | ------------ | ----------- | ----------- |
 | `cargo run` (debug)             | 1 000 000 | 2940.93 s    | 4.879 ms     | 94.673 ms   | 4.498 ms    |
-| `cargo run` (debug, second run) | 1 000 000 | 3188.88 s    | 5.399 ms     | 145.201 ms  | 4.911 ms    |
-| `+avx --release`                | 1 000 000 | **704.57 s** | **1.279 ms** | 54.653 ms   | 1.169 ms    |
+| `cargo run --release`                | 1 000 000 | **704.57 s** | **1.279 ms** | 54.653 ms   | 1.169 ms    |
 
 ### p = 32 (5‑bit modulus)
 
 | Build       | Mul count | Wall‑clock | Avg refresh | Max refresh | Min refresh |
 | ----------- | --------- | ---------- | ----------- | ----------- | ----------- |
-| `cargo run` | 100 000   | 898.97 s   | 3.946 ms    | 34.328 ms   | 3.672 ms    |
+| `cargo run(debug)` | 100 000   | 898.97 s   | 3.946 ms    | 34.328 ms   | 3.672 ms    |
 
 ---
 
@@ -187,12 +183,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 
-```
-
-Compile and run with
-
-```bash
-RUSTFLAGS='-C target-feature=+avx' cargo run --release --example quickstart
 ```
 
 ---
