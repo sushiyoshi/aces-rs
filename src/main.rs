@@ -11,10 +11,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut wtr = Writer::from_path("mul_stats.csv")?;
     wtr.write_record(&["index", "time_ms", "zero_adds"])?;
 
-    let max_mults = 10000;
+    // 乗算カウンターをリセット
+    Polynomial::reset_mul_count();
+
+    let max_mults = 1000;
     // Initialize optimal parameters from Python implementation
-    let p: u128 = 16;  // small prime
-    let q: u128 = 16_u128.pow(15) + 1; // small prime
+    let p: u128 = 32;  // small prime
+    let q: u128 = 2_u128.pow(40) + 1; // small prime
     let dim = 5;       // optimal polynomial dimension
     let n = 5;         // optimal number of components
 
@@ -41,7 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Initial message
     let m: u128 = rng.gen_range(1..p);
     let mut cur_value = m;
-    let (mut cipher, _) = aces.encrypt(m, &mut rng);
+    let mut cipher = aces.encrypt(m, &mut rng);
     
     // println!("Initial message: {}", m);
     
@@ -56,7 +59,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Generate random value in [1, p-1]
         let mi = rng.gen::<u128>() % (p - 1) + 1;
         // println!("mi: {}", mi);
-        let (cipher_i, _) = aces.encrypt(mi, &mut rng);
+        let cipher_i = aces.encrypt(mi, &mut rng);
         
         // // Perform multiplication (cur_value == 0: add, else: multiply)
         cipher = if cur_value == 0 {
@@ -91,12 +94,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Check if refresh is needed
         let refresher = Refresher::new(&aces, &alg, &chan);
         if refresh_frag {
-            // println!("Refresh start");
-            if !refresher.is_refreshable(&cipher, &secret_key) {
-                // println!("Making cipher refreshable at operation {}", i + 1);
+            println!("Refresh start");
+            if !refresher.is_refreshable(&cipher) {
+                println!("Making cipher refreshable at operation {}", i + 1);
                 let cipher_tuple = refresher.make_refreshable(
                     &cipher,
-                    &secret_key,
                     &mut rng
                 );
                 cipher = cipher_tuple.0.expect("Failed to make refreshable");
@@ -111,7 +113,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             refresh_times.push(refresh_start.elapsed());
 
             let elapsed_ms = refresh_start.elapsed().as_secs_f64() * 1000.0;
-            println!("Refresh time: {:.6} ms", elapsed_ms);
+            // println!("Refresh time: {:.6} ms", elapsed_ms);
             println!("zero_adds: {}", zero_adds);
             wtr.write_record(&[
                 i.to_string(),
@@ -153,6 +155,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Maximum time: {:?}", max_refresh);
         println!("Minimum time: {:?}", min_refresh);
     }
-    wtr.flush()?;           // 忘れずフラッシュ
+
+    // 総乗算回数を出力
+    println!("\nPolynomial multiplication count: {}", Polynomial::get_mul_count());
+    wtr.flush()?;          
     Ok(())
 }

@@ -21,134 +21,124 @@ impl<'a> Refresher<'a> {
     pub fn new(scheme: &'a Aces, alg: &'a AcesAlgebra, chan: &'a ArithChannel) -> Self {
         Self { scheme, alg, chan }
     }
-    pub fn is_refreshable(&self, c: &Cipher, secret_x: &Vec<Polynomial>) -> bool {
-        let ps_c0: Vec<u128> = c.dec
-            .iter()
-            .map(|ci| {
-                let eval = ci.eval(self.chan.omega) % self.chan.q;
-                let (diff, overflow1) = self.chan.q.overflowing_sub(eval);
-                if overflow1 {
-                    println!("Warning: Underflow detected at line 30: q ({}) - eval ({})", self.chan.q, eval);
-                }
-                let (rem, overflow2) = diff.overflowing_rem(self.chan.q);
-                if overflow2 {
-                    println!("Warning: Overflow detected at line 30 in modulo operation");
-                }
-                rem
-                // ((self.chan.q as i128 - eval as i128) % self.chan.q as i128) as u128
-            })
-            .collect();
-        let ps_c1 = c.enc.eval(self.chan.omega) % self.chan.q;
-
-        let x_evals: Vec<u128> = secret_x.iter()
-            .map(|xi| {
-                let xi_u = xi % &self.chan.u;
-                xi_u.eval(self.chan.omega) % self.chan.q
-            })
-            .collect();
-
-        let mut c0x_sum = 0u128;
-        for (ps_c0_i, x_evals_i) in ps_c0.iter().zip(x_evals.iter()) {
-            // println!("c0_x_sum: {}, ps_c0_i: {}, x_evals_i: {}", c0x_sum, ps_c0_i, x_evals_i);
-            let (prod, overflow1) = ps_c0_i.overflowing_mul(*x_evals_i);
-            if overflow1 {
-                println!("Warning: Overflow detected at line 46 in multiplication: ps_c0_i ({}) * x_evals_i ({})", ps_c0_i, x_evals_i);
+    
+    pub fn fractional_part_f64(a: u128, b: u128) -> f64 {
+        // (1) 整数部を取り除いた余り
+        let mut rem = a % b;
+    
+        // (2) 結果と、現在のビット重み
+        let mut result = 0.0f64;
+        let mut factor = 0.5f64;
+    
+        // 2*rem >= b の判定を、溢れを起こさずに行うための閾値
+        // b + 1 がオーバーフローする場合も検知してパニック
+        let threshold = b
+            .checked_add(1)
+            .expect("overflow computing threshold for (b + 1)")
+            / 2;
+    
+        // 二進法の小数ビットを最大 64 桁抽出
+        for _ in 0..53 {
+            if rem == 0 {
+                break;
             }
-            let (sum, overflow2) = c0x_sum.overflowing_add(prod);
-            if overflow2 {
-                println!("Warning: Overflow detected at line 46 in addition: c0x_sum ({}) + prod ({})", c0x_sum, prod);
+            if rem >= threshold {
+                // bit = 1
+                // rem = 2*rem - b を checked_* で
+                rem = rem
+                    .checked_shl(1)
+                    .expect("overflow on rem << 1");
+                rem = rem
+                    .checked_sub(b)
+                    .expect("overflow on (2*rem - b)");
+                result += factor;
+            } else {
+                // bit = 0, rem = 2*rem
+                rem = rem
+                    .checked_shl(1)
+                    .expect("overflow on rem << 1");
             }
-            c0x_sum = sum;
+            factor *= 0.5;
         }
-        let (sum, overflow1) = ps_c1.overflowing_add(c0x_sum);
-        if overflow1 {
-            println!("Warning: Overflow detected at line 48: ps_c1 ({}) + c0x_sum ({})", ps_c1, c0x_sum);
-        }
-        let (rem1, overflow2) = sum.overflowing_rem(self.chan.q);
-        if overflow2 {
-            println!("Warning: Overflow detected at line 48 in first modulo operation");
-        }
-        let (right, overflow3) = rem1.overflowing_rem(self.chan.p);
-        if overflow3 {
-            println!("Warning: Overflow detected at line 48 in second modulo operation");
-        }
-
-        let (ps_c1_mod_p, overflow4) = ps_c1.overflowing_rem(self.chan.p);
-        if overflow4 {
-            println!("Warning: Overflow detected at line 49 in ps_c1 modulo operation");
-        }
-        let (c0x_sum_mod_p, overflow5) = c0x_sum.overflowing_rem(self.chan.p);
-        if overflow5 {
-            println!("Warning: Overflow detected at line 49 in c0x_sum modulo operation");
-        }
-        let (sum2, overflow6) = ps_c1_mod_p.overflowing_add(c0x_sum_mod_p);
-        if overflow6 {
-            println!("Warning: Overflow detected at line 49: ps_c1_mod_p ({}) + c0x_sum_mod_p ({})",
-                ps_c1_mod_p, c0x_sum_mod_p);
-        }
-        let (left, overflow7) = sum2.overflowing_rem(self.chan.p);
-        if overflow7 {
-            println!("Warning: Overflow detected at line 49 in final modulo operation");
-        }
-        // println!("ps_c1, {}, c0x_sum: {},ps_c1 + c0x_sum: {}", ps_c1, c0x_sum, ps_c1 + c0x_sum);
-        // println!("Left: {} Right: {}", left, right);
-        let (_left2, overflow) = ps_c1.overflowing_add(c0x_sum);
-        if overflow {
-            println!("Warning: Overflow detected at line 103: ps_c1 ({}) + c0x_sum ({})", ps_c1, c0x_sum);
-        }
-        left == right
-        // let mut count = 0;
-        // if ps_c1 + c0x_sum > self.chan.q {
-        //     let max_loop = 10;
-        //     for i in 0..max_loop {
-        //        if left2 < self.chan.q {
-        //            break;
-        //        }
-        //        left2 = left2 - self.chan.q;
-        //        count = count + 1;
-        //     }
-        // }
-        // println!("Left: {}, left-count: {},right: {}", left, left2 % self.chan.p, right);
-        // println!("count: {}", count);
-        // left-count == right
-
+    
+        result
     }
-    // pub fn is_refreshable(&self, c: &Cipher, _secret_x: &Vec<Polynomial>) -> bool {
-    //     use crate::locator::{LocatorDB, Vector};
+    
+    pub fn is_refreshable(&self, ct: &Cipher) -> bool {
+        let p     = self.chan.p  as u128;
+        let q     = self.chan.q  as u128;
+        let omega = self.chan.omega as u128;
+        if ct.level > q/p {
+            println!("Ciphertext level {} exceeds threshold {}", ct.level, q/p);
+            return false;
+        }
+        // (1) ℓ := 〚C〛((c))
+        let ell: Vec<u128> = ct.dec
+            .iter()
+            .map(|poly| (poly % &self.chan.u).eval(omega) % q)
+            .collect();
 
-    //     // --- 0) 基本レベル判定（Theorem 5.46 左辺）
-    //     let level_bound = (self.chan.q + 1) / self.chan.p - 1;
-    //     if c.level <= level_bound {
-    //         return true;
-    //     }
+           
+        // (2) ω_q ∘ 〚C〛((x)) 
+        let x_eval = &self.scheme.x_eval;
 
-    //     // --- 1) 〚C〛((c)) = (-c₀)   を Z_q ベクトルで取得
-    //     let ell: Vector = c
-    //         .dec
-    //         .iter()
-    //         .map(|ci| {
-    //             let eval = ci.eval(self.chan.omega) % self.chan.q;
-    //             (self.chan.q + self.chan.q - eval) % self.chan.q // = −c₀ (mod q)
-    //         })
-    //         .collect();
-
-    //     // --- 2) locator/director DB で分解を試みる
-    //     let db = LocatorDB::new(self.chan.dim, self.chan.q);
-    //     db.has_decomposition(&ell)
-    // }
+        // (3) Definition 5.41: p-locator 判定
+        let dot: u128 = ell.iter()
+        .zip(x_eval.iter())
+        .fold(0u128, |acc, (e, x)| {
+            let (prod, overflow1) = e.overflowing_mul(*x);
+            if overflow1 {
+                panic!("Overflow occurred during multiplication: {} * {}", e, x);
+            }
+            let (sum, overflow2) = acc.overflowing_add(prod);
+            if overflow2 {
+                panic!("Overflow occurred during addition: {} + {}", acc, prod);
+            }
+            sum
+        });
+    
+        let x_eval_sum = self.scheme.x_eval_sum;
+        let dot_div = dot / q;
+        if x_eval_sum <= dot_div {
+            println!("x_eval_sum {} < dot_div {}", x_eval_sum, dot_div);
+            return false;
+        }
+        let diff = x_eval_sum - dot_div;
+        if diff % p != 0 {
+            return false;
+        }
+        let margin = Refresher::fractional_part_f64(dot, q);
+        // let margin = (dot as f64 / q as f64) - (dot_div as f64);
+        if margin < 0.0 {
+            panic!("Margin is negative: {}", margin);
+        } else {
+            println!("Margin: {}", margin);
+        }
+        println!("diff/p: {}", diff / p);
+        
+        // (4) Definition 5.43: margin ∈ [0,1)
+        let margin = Refresher::fractional_part_f64(dot, q);
+        if margin < 0.0 {
+            panic!("Margin is negative: {}", margin);
+        } else {
+            println!("Margin: {}", margin);
+        }
+        let lhs: f64 = (p * (ct.level + 1) - 1) as f64 / q as f64;
+        println!("lhs: {}, rhs: {}", lhs, 1.0 - margin);
+        lhs < 1.0 - margin
+    }
 
     /// Make a ciphertext refreshable by repeatedly adding encrypted zeros
     /// Will panic after MAX_ATTEMPTS (default: 10) unsuccessful attempts
     pub fn make_refreshable<R: Rng>(
         &self,
         cipher: &Cipher,
-        secret_x: &Vec<Polynomial>,
         rng: &mut R,
     ) -> (Option<Cipher>, u32) {
         const MAX_ATTEMPTS: u32 = 10000;
 
         // First check if already refreshable
-        if self.is_refreshable(cipher, secret_x) {
+        if self.is_refreshable(cipher) {
             return (Some(cipher.clone()), 0);
         }
 
@@ -158,7 +148,6 @@ impl<'a> Refresher<'a> {
         let mut attempts = 0;
 
         // Keep trying new zero ciphers until we get a refreshable result
-        // while !c&current, secret_x) {
         loop {
             attempts += 1;
             if attempts > MAX_ATTEMPTS {
@@ -166,7 +155,7 @@ impl<'a> Refresher<'a> {
             }
 
             // Generate a fresh encryption of zero
-            let (zero_cipher, _) = self.scheme.encrypt(0, rng);
+            let zero_cipher = self.scheme.encrypt(0, rng);
             
             // Add it to our current cipher
             let next = self.alg.add(&current, &zero_cipher);
@@ -178,7 +167,7 @@ impl<'a> Refresher<'a> {
             }
             
             // current = next;
-            if self.is_refreshable(&next, secret_x) {
+            if self.is_refreshable(&next) {
                 current = next;
                 break;
             }
@@ -197,14 +186,15 @@ impl<'a> Refresher<'a> {
         let mut rng = thread_rng();
 
         // 1. Create refresher vector from secret key evaluations
-        let (rho_cipher, rho_noise): (Vec<_>, Vec<_>) = secret_x
+        let rho_cipher = secret_x
             .iter()
             .map(|xi| {
                 let xi_u = xi % &self.chan.u;
                 let eval = xi_u.eval(self.chan.omega) % self.chan.q % self.chan.p;
                 self.scheme.encrypt(eval, &mut rng)
             })
-            .unzip();
+            .collect::<Vec<_>>();
+            
 
         // 2. Create negated c₀ components
         let c0_int: Vec<u128> = c.dec
@@ -215,15 +205,17 @@ impl<'a> Refresher<'a> {
                 (self.chan.q - eval) % self.chan.q
             })
             .collect();
-        let (c0_enc, c0_noise): (Vec<_>, Vec<_>) = c0_int
+        
+        let c0_enc = c0_int
             .iter()
             .map(|&m| self.scheme.encrypt(m % self.chan.p, &mut rng))
-            .unzip();
+            .collect::<Vec<_>>();
+            
             
         // 3. Get evaluation of c₁ = [C](c)
         let c1_eval = c.enc.eval(self.chan.omega) % self.chan.q;
         let c1_mod_p = c1_eval % self.chan.p;
-        let (c1_enc, c1_noise) = self.scheme.encrypt(c1_mod_p, &mut rng);
+        let c1_enc = self.scheme.encrypt(c1_mod_p, &mut rng);
 
         // 5. Scalar product ⟨c0_enc, ρ⟩
         let mut sp = self.alg.mult(&c0_enc[0], &rho_cipher[0]);
@@ -237,92 +229,7 @@ impl<'a> Refresher<'a> {
         // 7. recompute noise level (κ₀+κ₁)
         
         // Calculate new noise level
-        // Calculate κ₀ = p * (k₂ + Σ(κᵢ + k₁ᵢ + κᵢk₁ᵢ))
-        let kappa0 = {
-            let mut c1_sum: u128 = 0;
-            for &x in c1_noise.iter() {
-                let (sum, overflow) = c1_sum.overflowing_add(x);
-                if overflow {
-                    println!("Warning: Overflow detected at line 171 in c1_noise sum: acc ({}) + x ({})", c1_sum, x);
-                }
-                c1_sum = sum;
-            }
-
-            let mut rho_sum: u128 = 0;
-            for v in rho_noise.iter() {
-                for &x in v.iter() {
-                    let (sum, overflow) = rho_sum.overflowing_add(x);
-                    if overflow {
-                        println!("Warning: Overflow detected at line 172 in rho_noise sum");
-                    }
-                    rho_sum = sum;
-                }
-            }
-
-            let mut c0_sum: u128 = 0;
-            for v in c0_noise.iter() {
-                for &x in v.iter() {
-                    let (sum, overflow) = c0_sum.overflowing_add(x);
-                    if overflow {
-                        println!("Warning: Overflow detected at line 173 in c0_noise sum");
-                    }
-                    c0_sum = sum;
-                }
-            }
-
-            let mut product_sum: u128 = 0;
-            for (rf_noise, c0_noise) in rho_noise.iter().zip(c0_noise.iter()) {
-                let mut rf_sum = 0u128;
-                for &x in rf_noise.iter() {
-                    let (sum, overflow) = rf_sum.overflowing_add(x);
-                    if overflow {
-                        println!("Warning: Overflow detected in rf_noise sum");
-                    }
-                    rf_sum = sum;
-                }
-                
-                let mut c0_sum = 0u128;
-                for &x in c0_noise.iter() {
-                    let (sum, overflow) = c0_sum.overflowing_add(x);
-                    if overflow {
-                        println!("Warning: Overflow detected in c0_noise sum");
-                    }
-                    c0_sum = sum;
-                }
-                
-                let (prod, overflow1) = rf_sum.overflowing_mul(c0_sum);
-                if overflow1 {
-                    println!("Warning: Overflow detected in product: rf_sum ({}) * c0_sum ({})", rf_sum, c0_sum);
-                }
-                let (sum, overflow2) = product_sum.overflowing_add(prod);
-                if overflow2 {
-                    println!("Warning: Overflow detected in sum accumulation: acc ({}) + prod ({})", product_sum, prod);
-                }
-                product_sum = sum;
-            }
-
-            // Final calculations with overflow detection
-            let (sum1, overflow1) = c1_sum.overflowing_add(rho_sum);
-            if overflow1 {
-                println!("Warning: Overflow detected in final sum step 1");
-            }
-            let (sum2, overflow2) = sum1.overflowing_add(c0_sum);
-            if overflow2 {
-                println!("Warning: Overflow detected in final sum step 2");
-            }
-            let (sum3, overflow3) = sum2.overflowing_add(product_sum);
-            if overflow3 {
-                println!("Warning: Overflow detected in final sum step 3");
-            }
-            let (result, overflow4) = self.chan.p.overflowing_mul(sum3);
-            if overflow4 {
-                println!("Warning: Overflow detected in final multiplication: p ({}) * sum3 ({})",
-                    self.chan.p, sum3);
-            }
-            result
-        };
-
-        let kappa1 = {
+        let kappa_asterisk_star = {
             let p = self.chan.p;
             let p_minus_1 = p.checked_sub(1)
                 .expect("Arithmetic underflow in p-1");
@@ -337,7 +244,7 @@ impl<'a> Refresher<'a> {
         Cipher {
             dec: result.dec,
             enc: result.enc,
-            level: kappa0.checked_add(kappa1)
+            level: result.level.checked_add(kappa_asterisk_star)
                 .expect("Arithmetic overflow in final level calculation"),
         }
     }
@@ -363,7 +270,7 @@ mod tests {
 
         // Create and encrypt small message
         let m = 2u128;
-        let (cipher, _) = aces.encrypt(m, &mut rng);
+        let cipher = aces.encrypt(m, &mut rng);
         
         // Record initial state
         let init_level = cipher.level;
@@ -376,7 +283,6 @@ mod tests {
         // Make refreshable if needed
         let cip = refresher.make_refreshable(
             &cipher,
-            &secret_key,
             &mut rng
         );
         let cipher = cip.0.expect("Failed to make refreshable");
@@ -410,7 +316,7 @@ mod tests {
             "Evaluation mod p changed"
         );
         assert!(
-            refresher.is_refreshable(&refreshed, &secret_key),
+            refresher.is_refreshable(&refreshed),
             "Result not refreshable"
         );
     }
@@ -429,7 +335,7 @@ mod tests {
         println!("Refresh threshold: {}", (chan.q + 1) / chan.p - 1);
 
         let m = 1u128;
-        let (mut cipher, _) = aces.encrypt(m, &mut rng);
+        let mut cipher = aces.encrypt(m, &mut rng);
         let mut refresh_count = 0;
 
         // Try multiple refresh cycles
@@ -451,7 +357,6 @@ mod tests {
             // Make refreshable if needed
             let cip = refresher.make_refreshable(
                 &cipher,
-                &secret_key,
                 &mut rng
             );
             
@@ -483,7 +388,7 @@ mod tests {
                 "Evaluation changed at iter {}", i
             );
             assert!(
-                refresher.is_refreshable(&cipher, &secret_key),
+                refresher.is_refreshable(&cipher),
                 "Result not refreshable at iter {}", i
             );
         }
@@ -512,18 +417,18 @@ mod tests {
 
         // Start with a simple message
         let m = 2u128;
-        let (mut cipher, _) = aces.encrypt(m, &mut rng);
+        let mut cipher = aces.encrypt(m, &mut rng);
         
         // Do multiple multiplications to increase noise
         for i in 0..3 {
-            let (tmp, _) = aces.encrypt(1, &mut rng);
+            let tmp = aces.encrypt(1, &mut rng);
             cipher = alg.mult(&cipher, &tmp);
             
             println!("\nAfter {} multiplications:", i+1);
             println!("Level: {}", cipher.level);
             
             // Try refresh if possible
-            if refresher.is_refreshable(&cipher, &secret_key) {
+            if refresher.is_refreshable(&cipher) {
                 let pre_level = cipher.level;
                 cipher = refresher.refresh(&cipher, &secret_key);
                 println!("Refreshed: {} -> {}", pre_level, cipher.level);

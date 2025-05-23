@@ -84,7 +84,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Initial message
     let m: u128 = rng.gen_range(1..p);
     let mut cur_value = m;
-    let (mut cipher, _) = aces.encrypt(m, &mut rng);
+    let mut cipher = aces.encrypt(m, &mut rng);
     
     println!("Initial message: {}", m);
     
@@ -99,7 +99,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Generate random value in [1, p-1]
         let mi = rng.gen::<u128>() % (p - 1) + 1;
         // println!("mi: {}", mi);
-        let (cipher_i, _) = aces.encrypt(mi, &mut rng);
+        let cipher_i = aces.encrypt(mi, &mut rng);
         
         // Perform multiplication (cur_value == 0: add, else: multiply)
         cipher = if cur_value == 0 {
