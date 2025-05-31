@@ -21,49 +21,6 @@ impl<'a> Refresher<'a> {
     pub fn new(scheme: &'a Aces, alg: &'a AcesAlgebra, chan: &'a ArithChannel) -> Self {
         Self { scheme, alg, chan }
     }
-    
-    pub fn fractional_part_f64(a: u128, b: u128) -> f64 {
-        // (1) 整数部を取り除いた余り
-        let mut rem = a % b;
-    
-        // (2) 結果と、現在のビット重み
-        let mut result = 0.0f64;
-        let mut factor = 0.5f64;
-    
-        // 2*rem >= b の判定を、溢れを起こさずに行うための閾値
-        // b + 1 がオーバーフローする場合も検知してパニック
-        let threshold = b
-            .checked_add(1)
-            .expect("overflow computing threshold for (b + 1)")
-            / 2;
-    
-        // 二進法の小数ビットを最大 64 桁抽出
-        for _ in 0..53 {
-            if rem == 0 {
-                break;
-            }
-            if rem >= threshold {
-                // bit = 1
-                // rem = 2*rem - b を checked_* で
-                rem = rem
-                    .checked_shl(1)
-                    .expect("overflow on rem << 1");
-                rem = rem
-                    .checked_sub(b)
-                    .expect("overflow on (2*rem - b)");
-                result += factor;
-            } else {
-                // bit = 0, rem = 2*rem
-                rem = rem
-                    .checked_shl(1)
-                    .expect("overflow on rem << 1");
-            }
-            factor *= 0.5;
-        }
-    
-        result
-    }
-    
     pub fn is_refreshable(&self, ct: &Cipher) -> bool {
         let p     = self.chan.p  as u128;
         let q     = self.chan.q  as u128;
@@ -77,8 +34,13 @@ impl<'a> Refresher<'a> {
             .iter()
             .map(|poly| (poly % &self.chan.u).eval(omega) % q)
             .collect();
-
-           
+        
+        // ellに0が含まれているかチェック
+        if ell.iter().any(|&e| e == 0) {
+            println!("Ciphertext contains zero in dec: {:?}", ell);
+            return false;
+        }
+  
         // (2) ω_q ∘ 〚C〛((x)) 
         let x_eval = &self.scheme.x_eval;
 
@@ -96,6 +58,7 @@ impl<'a> Refresher<'a> {
             }
             sum
         });
+        
     
         let x_eval_sum = self.scheme.x_eval_sum;
         let dot_div = dot / q;
@@ -107,25 +70,11 @@ impl<'a> Refresher<'a> {
         if diff % p != 0 {
             return false;
         }
-        let margin = Refresher::fractional_part_f64(dot, q);
-        // let margin = (dot as f64 / q as f64) - (dot_div as f64);
-        if margin < 0.0 {
-            panic!("Margin is negative: {}", margin);
-        } else {
-            println!("Margin: {}", margin);
-        }
-        println!("diff/p: {}", diff / p);
-        
-        // (4) Definition 5.43: margin ∈ [0,1)
-        let margin = Refresher::fractional_part_f64(dot, q);
-        if margin < 0.0 {
-            panic!("Margin is negative: {}", margin);
-        } else {
-            println!("Margin: {}", margin);
-        }
-        let lhs: f64 = (p * (ct.level + 1) - 1) as f64 / q as f64;
-        println!("lhs: {}, rhs: {}", lhs, 1.0 - margin);
-        lhs < 1.0 - margin
+        // println!("diff / p: {:e}", diff / p);
+        // println!("p * ct.level + p-1: {:e}", p * ct.level + p - 1);
+        // println!("q - dot % q: {:e}", q - dot % q);
+        // println!("ct.level: {:e}", ct.level);
+        p * ct.level + p-1 < q - dot % q
     }
 
     /// Make a ciphertext refreshable by repeatedly adding encrypted zeros
@@ -184,6 +133,11 @@ impl<'a> Refresher<'a> {
     pub fn refresh(&self, c: &Cipher, secret_x: &Vec<Polynomial>) -> Cipher {
         // 1. Encrypt every x_i (refresher vector ρ)
         let mut rng = thread_rng();
+
+        // if !self.is_refreshable2(c, secret_x) {
+        //     println!("Waring: Ciphertext is not refreshable");
+        // }
+
 
         // 1. Create refresher vector from secret key evaluations
         let rho_cipher = secret_x
