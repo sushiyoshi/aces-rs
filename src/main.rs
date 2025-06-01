@@ -94,9 +94,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Check if refresh is needed
         let refresher = Refresher::new(&aces, &alg, &chan);
         if refresh_frag {
-            println!("Refresh start");
+            // println!("Refresh start");
             if !refresher.is_refreshable(&cipher) {
-                println!("Making cipher refreshable at operation {}", i + 1);
+                // println!("Making cipher refreshable at operation {}", i + 1);
                 let cipher_tuple = refresher.make_refreshable(
                     &cipher,
                     &mut rng
@@ -109,12 +109,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             
             // println!("Performing refresh at operation {}", i + 1);
             let refresh_start = Instant::now();
-            cipher = refresher.refresh(&cipher, &secret_key);
+            cipher = refresher.refresh(&cipher);
             refresh_times.push(refresh_start.elapsed());
 
             let elapsed_ms = refresh_start.elapsed().as_secs_f64() * 1000.0;
             // println!("Refresh time: {:.6} ms", elapsed_ms);
-            println!("zero_adds: {}", zero_adds);
+            // println!("zero_adds: {}", zero_adds);
             wtr.write_record(&[
                 i.to_string(),
                 format!("{:.6}", elapsed_ms),

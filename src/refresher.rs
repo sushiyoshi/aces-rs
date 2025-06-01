@@ -37,7 +37,7 @@ impl<'a> Refresher<'a> {
         
         // ellに0が含まれているかチェック
         if ell.iter().any(|&e| e == 0) {
-            println!("Ciphertext contains zero in dec: {:?}", ell);
+            // println!("Ciphertext contains zero in dec: {:?}", ell);
             return false;
         }
   
@@ -70,10 +70,6 @@ impl<'a> Refresher<'a> {
         if diff % p != 0 {
             return false;
         }
-        // println!("diff / p: {:e}", diff / p);
-        // println!("p * ct.level + p-1: {:e}", p * ct.level + p - 1);
-        // println!("q - dot % q: {:e}", q - dot % q);
-        // println!("ct.level: {:e}", ct.level);
         p * ct.level + p-1 < q - dot % q
     }
 
@@ -130,26 +126,16 @@ impl<'a> Refresher<'a> {
     }
     /// Core refresh algorithm (ACES §5.5).
     #[must_use]
-    pub fn refresh(&self, c: &Cipher, secret_x: &Vec<Polynomial>) -> Cipher {
+    pub fn refresh(&self, c: &Cipher) -> Cipher {
         // 1. Encrypt every x_i (refresher vector ρ)
         let mut rng = thread_rng();
-
-        // if !self.is_refreshable2(c, secret_x) {
-        //     println!("Waring: Ciphertext is not refreshable");
-        // }
-
-
-        // 1. Create refresher vector from secret key evaluations
-        let rho_cipher = secret_x
+        let rho_cipher: Vec<Cipher> = self.scheme.x_eval
             .iter()
-            .map(|xi| {
-                let xi_u = xi % &self.chan.u;
-                let eval = xi_u.eval(self.chan.omega) % self.chan.q % self.chan.p;
+            .map(|&x_eval_i| {
+                let eval = x_eval_i % self.chan.q % self.chan.p;
                 self.scheme.encrypt(eval, &mut rng)
             })
-            .collect::<Vec<_>>();
-            
-
+            .collect();
         // 2. Create negated c₀ components
         let c0_int: Vec<u128> = c.dec
             .iter()
@@ -242,7 +228,7 @@ mod tests {
         let cipher = cip.0.expect("Failed to make refreshable");
 
         // Perform refresh
-        let refreshed = refresher.refresh(&cipher, &secret_key);
+        let refreshed = refresher.refresh(&cipher);
         
         // Check post-refresh state
         println!("\nPost-refresh state:");
@@ -317,7 +303,7 @@ mod tests {
             cipher = cip.0.expect("Failed to make refreshable");
 
             // Do refresh
-            cipher = refresher.refresh(&cipher, &secret_key);
+            cipher = refresher.refresh(&cipher);
             refresh_count += 1;
 
             // Check post-state
@@ -384,7 +370,7 @@ mod tests {
             // Try refresh if possible
             if refresher.is_refreshable(&cipher) {
                 let pre_level = cipher.level;
-                cipher = refresher.refresh(&cipher, &secret_key);
+                cipher = refresher.refresh(&cipher);
                 println!("Refreshed: {} -> {}", pre_level, cipher.level);
                 
                 // Verify refresh properties
