@@ -1,6 +1,10 @@
 //! Polynomial type over Z/qZ with u128 coefficients.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use rand::Rng;
+
+// 多項式乗算の回数をカウントするためのグローバルカウンター
+static MUL_COUNT: AtomicUsize = AtomicUsize::new(0);
 use std::ops::{Add, Mul, Neg, Rem, Sub};
 use crate::arith_channel::extended_gcd2;
 use crate::ntt;
@@ -14,6 +18,16 @@ pub struct Polynomial {
 }
 
 impl Polynomial {
+    /// 多項式乗算のカウントをリセット
+    pub fn reset_mul_count() {
+        MUL_COUNT.store(0, Ordering::SeqCst);
+    }
+
+    /// 現在の多項式乗算回数を取得
+    pub fn get_mul_count() -> usize {
+        MUL_COUNT.load(Ordering::SeqCst)
+    }
+
     pub fn new(coeffs: Vec<u128>, modulus: u128) -> Self {
         assert!(modulus > 0, "modulus must be positive");
         let mut coeffs = coeffs.into_iter().map(|x| x % modulus).collect::<Vec<_>>();
@@ -317,92 +331,93 @@ impl Add<Polynomial> for &Polynomial {
     }
 }
 
-// impl Mul for &Polynomial {
-//     type Output = Polynomial;
-//     fn mul(self, rhs: Self) -> Self::Output {
-//         // println!("self, rhs: {:?}", (self, rhs));
-//         let len = self.coeffs.len() + rhs.coeffs.len() - 1;
-//         let mut v = vec![0; len];
-//         for (i, &a) in self.coeffs.iter().enumerate() {
-//             for (j, &b) in rhs.coeffs.iter().enumerate() {
-//                 let idx = i + j;
-//                 let prod = a.checked_mul(b).expect("polynomial multiplication overflow");
-//                 v[idx] = (v[idx] + prod) % self.modulus;
-                
-//             }
-//         }
-//         let mut result = Polynomial {
-//             coeffs: v,
-//             modulus: self.modulus,
-//         };
-//         result.trim();
-//         result
-//     }
-// }
-
-// impl Mul for Polynomial {
-//     type Output = Polynomial;
-//     fn mul(self, rhs: Self) -> Self::Output {
-//         &self * &rhs
-//     }
-// }
-
-// impl Mul<&Polynomial> for Polynomial {
-//     type Output = Polynomial;
-//     fn mul(self, rhs: &Polynomial) -> Self::Output {
-//         &self * rhs
-//     }
-// }
-
-// impl Mul<Polynomial> for &Polynomial {
-//     type Output = Polynomial;
-//     fn mul(self, rhs: Polynomial) -> Self::Output {
-//         self * &rhs
-//     }
-// }
-
-
-impl<'a, 'b> Mul<&'b Polynomial> for &'a Polynomial {
+impl Mul for &Polynomial {
     type Output = Polynomial;
-
-    /// 高速 NTT + フォールバック O(n²) 乗算（参照 × 参照）
-    fn mul(self, rhs: &'b Polynomial) -> Polynomial {
-        assert_eq!(self.modulus, rhs.modulus, "moduli must match");
-        let modu = self.modulus;
-        let threshold = 32;
-
-        let coeffs = if max(self.coeffs.len(), rhs.coeffs.len()) > threshold {
-            ntt::convolve(&self.coeffs, &rhs.coeffs, modu)
-        } else {
-            let mut prod = vec![0u128; self.coeffs.len() + rhs.coeffs.len() - 1];
-            for i in 0..self.coeffs.len() {
-                for j in 0..rhs.coeffs.len() {
-                    prod[i + j] =
-                        (prod[i + j] + self.coeffs[i] * rhs.coeffs[j]) % modu;
-                }
+    fn mul(self, rhs: Self) -> Self::Output {
+        // 乗算回数をインクリメント
+        MUL_COUNT.fetch_add(1, Ordering::SeqCst);
+        let len = self.coeffs.len() + rhs.coeffs.len() - 1;
+        let mut v = vec![0; len];
+        for (i, &a) in self.coeffs.iter().enumerate() {
+            for (j, &b) in rhs.coeffs.iter().enumerate() {
+                let idx = i + j;
+                let prod = a.checked_mul(b).expect("polynomial multiplication overflow");
+                v[idx] = (v[idx] + prod) % self.modulus;
+                
             }
-            prod
+        }
+        let mut result = Polynomial {
+            coeffs: v,
+            modulus: self.modulus,
         };
-
-        // ← *** Self::new ではなく `Polynomial::new` に変更 ***
-        Polynomial::new(coeffs, modu)
+        result.trim();
+        result
     }
 }
 
-impl<'a> Mul<&'a Polynomial> for Polynomial {
+impl Mul for Polynomial {
     type Output = Polynomial;
-    fn mul(self, rhs: &'a Polynomial) -> Polynomial { (&self).mul(rhs) }
+    fn mul(self, rhs: Self) -> Self::Output {
+        &self * &rhs
+    }
 }
 
-impl<'a> Mul<Polynomial> for &'a Polynomial {
+impl Mul<&Polynomial> for Polynomial {
     type Output = Polynomial;
-    fn mul(self, rhs: Polynomial) -> Polynomial { self.mul(&rhs) }
+    fn mul(self, rhs: &Polynomial) -> Self::Output {
+        &self * rhs
+    }
 }
 
-impl Mul<Polynomial> for Polynomial {
+impl Mul<Polynomial> for &Polynomial {
     type Output = Polynomial;
-    fn mul(self, rhs: Polynomial) -> Polynomial { (&self).mul(&rhs) }
+    fn mul(self, rhs: Polynomial) -> Self::Output {
+        self * &rhs
+    }
 }
+
+
+// impl<'a, 'b> Mul<&'b Polynomial> for &'a Polynomial {
+//     type Output = Polynomial;
+
+//     /// 高速 NTT + フォールバック O(n²) 乗算（参照 × 参照）
+//     fn mul(self, rhs: &'b Polynomial) -> Polynomial {
+//         assert_eq!(self.modulus, rhs.modulus, "moduli must match");
+//         let modu = self.modulus;
+//         let threshold = 32;
+
+//         let coeffs = if max(self.coeffs.len(), rhs.coeffs.len()) > threshold {
+//             ntt::convolve(&self.coeffs, &rhs.coeffs, modu)
+//         } else {
+//             let mut prod = vec![0u128; self.coeffs.len() + rhs.coeffs.len() - 1];
+//             for i in 0..self.coeffs.len() {
+//                 for j in 0..rhs.coeffs.len() {
+//                     prod[i + j] =
+//                         (prod[i + j] + self.coeffs[i] * rhs.coeffs[j]) % modu;
+//                 }
+//             }
+//             prod
+//         };
+
+//         // ← *** Self::new ではなく `Polynomial::new` に変更 ***
+//         Polynomial::new(coeffs, modu)
+//     }
+// }
+
+// impl<'a> Mul<&'a Polynomial> for Polynomial {
+//     type Output = Polynomial;
+//     fn mul(self, rhs: &'a Polynomial) -> Polynomial { (&self).mul(rhs) }
+// }
+
+// impl<'a> Mul<Polynomial> for &'a Polynomial {
+//     type Output = Polynomial;
+//     fn mul(self, rhs: Polynomial) -> Polynomial { self.mul(&rhs) }
+// }
+
+// impl Mul<Polynomial> for Polynomial {
+//     type Output = Polynomial;
+//     fn mul(self, rhs: Polynomial) -> Polynomial { (&self).mul(&rhs) }
+// }
 
 
 impl Neg for Polynomial {
@@ -489,6 +504,28 @@ impl Rem<Polynomial> for &Polynomial {
 mod tests {
     use super::*;
     use rand::{Rng, thread_rng};
+    
+    #[test]
+    fn test_mul_count() {
+        // カウントをリセット
+        Polynomial::reset_mul_count();
+        
+        let m = 17;
+        let p1 = Polynomial::new(vec![1, 2, 3], m);
+        let p2 = Polynomial::new(vec![4, 5], m);
+        
+        // 初期状態で乗算回数は0
+        assert_eq!(Polynomial::get_mul_count(), 0);
+        
+        // 1回目の乗算
+        let _ = &p1 * &p2;
+        assert_eq!(Polynomial::get_mul_count(), 1);
+        
+        // 2回目の乗算
+        let _ = p1 * p2;
+        assert_eq!(Polynomial::get_mul_count(), 2);
+    }
+
 
     #[test]
     fn test_basic_ops() {

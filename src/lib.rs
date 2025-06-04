@@ -12,7 +12,6 @@ pub mod scheme;
 pub mod algebra;
 pub mod refresher;
 pub mod rand_iso; 
-pub mod locator; 
 pub mod ntt;          
 
 pub use arith_channel::ArithChannel;

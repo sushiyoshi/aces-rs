@@ -13,6 +13,8 @@ use crate::rand_iso::RandIso;
 pub struct Aces {
     pub f0: Vec<Vec<Polynomial>>,
     pub f1: Vec<Polynomial>,
+    pub x_eval: Vec<u128>,
+    pub x_eval_sum : u128,
     chan: ArithChannel,
 }
 
@@ -50,23 +52,40 @@ impl Aces {
             let e = chan.generate_vanisher(k);
             f1[i] = (&f1[i] + &e) % &chan.u;
         }
-
+        // public parameter [C]((x))
+        let x_eval: Vec<u128> = secret_key
+            .iter()
+            .map(|xi| (xi % &chan.u).eval(chan.omega) % chan.q)
+            .collect();
+        let x_eval_sum: u128 = x_eval.iter().fold(0u128, |acc, x| {
+            let (sum, overflow) = acc.overflowing_add(*x);
+            if overflow {
+                panic!("Overflow occurred during addition: {} + {}", acc, x);
+            }
+            sum
+        });
         (
             Self {
                 f0,
                 f1,
+                x_eval,
+                x_eval_sum,
                 chan: chan.clone()
             },
             secret_key
         )
     }
 
-    pub fn new_with_custom(f0: Vec<Vec<Polynomial>>, f1: Vec<Polynomial>, chan: ArithChannel) -> Self {
-        Self { f0, f1, chan }
+    // pub fn new_with_custom(f0: Vec<Vec<Polynomial>>, f1: Vec<Polynomial>, chan: ArithChannel) -> Self {
+    //     Self { f0, f1,chan }
+    // }
+    /// 公開パラメータへの参照
+    pub fn public_x_eval(&self) -> &[u128] {
+        &self.x_eval
     }
 
     /// Encrypt a message m ∈ ℤ_p  →  (Cipher, noise_vector)
-    pub fn encrypt<R: Rng>(&self, m: u128, rng: &mut R) -> (Cipher, Vec<u128>) {
+    pub fn encrypt<R: Rng>(&self, m: u128, rng: &mut R) -> Cipher {
         // Verify message is within bounds
         let m_p = m;
         // println!("m: {}", m_p);
@@ -115,19 +134,13 @@ impl Aces {
             dec_vec.push(acc);
         }
         // println!("dec_vec: {:?}", dec_vec);
-        
-        let noise: Vec<u128> = b.iter()
-            .map(|bi| bi.eval_at_one() % self.chan.p)
-            .collect();
-        
-            
+    
         (
             Cipher {
                 dec: dec_vec,
                 enc,
                 level: (self.chan.n as u128) * self.chan.p,
-            },
-            noise,
+            }
         )
     }
 
@@ -190,13 +203,12 @@ mod tests {
         let message2 = 5u128;
 
         // Single message encryption/decryption
-        let (c1, noise1) = aces.encrypt(message, &mut rng);
-        assert!(noise1.iter().all(|&n| n < chan.p), "noise exceeds bound");
+        let c1 = aces.encrypt(message, &mut rng);
         let m1 = aces.decrypt(&c1, &secret_key);
         assert_eq!(m1, message, "basic decryption failed");
 
         // Test homomorphic operations with proper tensor
-        let (c2, _) = aces.encrypt(message2, &mut rng);
+        let c2 = aces.encrypt(message2, &mut rng);
         let alg = AcesAlgebra::new(&chan, &secret_key);
         
         // Test addition
@@ -214,7 +226,7 @@ mod tests {
         // Validate multiplication properties
         for i in 0..3 {
             let m_i = (i + 2) as u128;
-            let (c_i, _) = aces.encrypt(m_i, &mut rng);
+            let c_i = aces.encrypt(m_i, &mut rng);
             
             // Test associativity
             let c_left = alg.mult(&alg.mult(&c1, &c2), &c_i);
@@ -234,7 +246,7 @@ mod tests {
         let mut ops = 0;
         
         for _ in 0..10 {  // Try 10 multiplications
-            let (next_cipher, _) = aces.encrypt(message, &mut rng);
+            let next_cipher = aces.encrypt(message, &mut rng);
             curr_cipher = alg.mult(&curr_cipher, &next_cipher);
             
             // Verify each multiplication result
