@@ -8,7 +8,7 @@ use crate::{arith_channel::ArithChannel, cipher::Cipher, polynomial::Polynomial,
 
 pub mod modp;
 
-use modp::{dot_mod_p, gaussian_elimination_mod_p};
+use modp::{dot_mod_p, gaussian_elimination_mod_p, is_prime};
 
 /// Result of projecting a ciphertext via the public evaluation map.
 #[derive(Debug, Clone, Serialize)]
@@ -62,6 +62,11 @@ pub fn run_attack<R: Rng>(
         sample_count >= chan.dim,
         "need at least {} samples to determine φ(x)",
         chan.dim
+    );
+    ensure!(
+        is_prime(chan.p),
+        "attack requires prime p; arithmetic channel configured with p = {}",
+        chan.p
     );
 
     let msg_mod = message % chan.p;

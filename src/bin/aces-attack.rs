@@ -8,7 +8,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde_json::json;
 
 use aces_core::{
-    attack::{decrypt_with_projected_secret, phi_polynomial, run_attack},
+    attack::{decrypt_with_projected_secret, run_attack},
     scheme::Aces,
     ArithChannel,
 };
@@ -30,7 +30,7 @@ struct Args {
     json: bool,
 }
 
-const DEFAULT_P: u128 = 32;
+const DEFAULT_P: u128 = 31;
 const DEFAULT_Q: u128 = (1u128 << 40) + 1;
 const DEFAULT_DIM: usize = 5;
 const DEFAULT_N: usize = 5;
@@ -41,7 +41,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let p = args.prime_p.unwrap_or(DEFAULT_P);
     let chan = ArithChannel::new(p, DEFAULT_Q, DEFAULT_DIM, DEFAULT_N);
-    let (aces, secret_key) = Aces::generate_keypair(&chan);
+    let (aces, _secret_key) = Aces::generate_keypair(&chan);
 
     let mut rng = StdRng::seed_from_u64(args.seed);
     let min_samples = aces.channel().dim + 12;
@@ -52,10 +52,10 @@ fn main() -> Result<()> {
 
     let attack = run_attack(&aces, &mut rng, sample_target, DEFAULT_MESSAGE)
         .context("attack failed: insufficient rank over F_p")?;
-
-    let actual_phi: Vec<u128> = secret_key
+    let actual_phi: Vec<u128> = aces
+        .public_x_eval()
         .iter()
-        .map(|poly| phi_polynomial(aces.channel(), poly))
+        .map(|value| value % aces.channel().p)
         .collect();
 
     let mut success = 0usize;

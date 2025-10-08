@@ -2,6 +2,25 @@
 
 use crate::arith_channel::extended_gcd2;
 
+/// Return `true` when `p` is an odd prime (2 is also supported).
+#[must_use]
+pub fn is_prime(p: u128) -> bool {
+    if p < 2 {
+        return false;
+    }
+    if p % 2 == 0 {
+        return p == 2;
+    }
+    let mut d = 3u128;
+    while d * d <= p {
+        if p % d == 0 {
+            return false;
+        }
+        d += 2;
+    }
+    true
+}
+
 /// Compute modular inverse of `a` modulo `p` when gcd(a, p) = 1.
 #[must_use]
 pub fn inv_mod(a: u128, p: u128) -> Option<u128> {

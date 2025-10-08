@@ -7,7 +7,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[test]
 fn recover_secret_image_via_projection() {
-    let p: u128 = 32;
+    let p: u128 = 31;
     let q: u128 = (1u128 << 40) + 1;
     let dim = 5usize;
     let n = 5usize;
