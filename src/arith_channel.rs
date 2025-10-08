@@ -59,6 +59,13 @@ impl ArithChannel {
         poly.eval(self.omega)
     }
 
+    /// Project a polynomial to the base field via φ := πₚ ∘ ι_q ∘ ⟦C⟧.
+    #[must_use]
+    pub fn project_poly(&self, poly: &Polynomial) -> u128 {
+        let reduced = poly.rem_poly(&self.u);
+        reduced.eval(self.omega) % self.p
+    }
+
     /// Get sigma[q]_{i,j} value
     pub fn sigma_q(&self, i: usize, j: usize) -> u128 {
         let sigma_i = self.n_repartition[i];
