@@ -40,83 +40,85 @@ fn sub_mod(a: u128, b: u128, p: u128) -> u128 {
 
 /// Perform Gaussian elimination over ℤ/pℤ to solve A·s = y.
 pub fn gaussian_elimination_mod_p(
-    matrix: &mut [Vec<u128>],
-    rhs: &mut [u128],
+    matrix: &[Vec<u128>],
+    rhs: &[u128],
     p: u128,
     dimension: usize,
 ) -> Option<Vec<u128>> {
-    if matrix.is_empty() || dimension == 0 {
+    if dimension == 0 || matrix.is_empty() || rhs.len() != matrix.len() {
         return None;
     }
+
     let rows = matrix.len();
     let cols = dimension;
 
-    for row in matrix.iter_mut() {
-        if row.len() < cols {
-            return None;
-        }
-        for val in row.iter_mut() {
-            *val %= p;
-        }
-    }
-    for r in rhs.iter_mut() {
-        *r %= p;
+    if matrix.iter().any(|row| row.len() < cols) {
+        return None;
     }
 
-    let mut pivot_row = 0;
+    // Build augmented matrix [A | y] reduced modulo p.
+    let mut aug = vec![vec![0u128; cols + 1]; rows];
+    for (r, row) in matrix.iter().enumerate() {
+        for c in 0..cols {
+            aug[r][c] = row[c] % p;
+        }
+        aug[r][cols] = rhs[r] % p;
+    }
+
+    let mut pivot_row = 0usize;
+    let mut pivot_cols = Vec::with_capacity(cols);
+
     for col in 0..cols {
-        if pivot_row >= rows {
+        if pivot_row == rows {
             break;
         }
         let mut pivot = None;
         for r in pivot_row..rows {
-            let val = matrix[r][col] % p;
+            let val = aug[r][col] % p;
             if val != 0 && gcd(val, p) == 1 {
                 pivot = Some(r);
                 break;
             }
         }
+
         let Some(pivot_idx) = pivot else { continue };
+
         if pivot_idx != pivot_row {
-            matrix.swap(pivot_row, pivot_idx);
-            rhs.swap(pivot_row, pivot_idx);
+            aug.swap(pivot_row, pivot_idx);
         }
-        let pivot_val = matrix[pivot_row][col] % p;
-        let inv = inv_mod(pivot_val, p)?;
-        for c in col..cols {
-            matrix[pivot_row][c] = mul_mod(matrix[pivot_row][c], inv, p);
+
+        let inv = inv_mod(aug[pivot_row][col], p)?;
+        for c in col..=cols {
+            aug[pivot_row][c] = mul_mod(aug[pivot_row][c], inv, p);
         }
-        rhs[pivot_row] = mul_mod(rhs[pivot_row], inv, p);
 
         for r in 0..rows {
             if r == pivot_row {
                 continue;
             }
-            let factor = matrix[r][col] % p;
+            let factor = aug[r][col] % p;
             if factor == 0 {
                 continue;
             }
-            for c in col..cols {
-                let prod = mul_mod(factor, matrix[pivot_row][c], p);
-                matrix[r][c] = sub_mod(matrix[r][c], prod, p);
+            for c in col..=cols {
+                let prod = mul_mod(factor, aug[pivot_row][c], p);
+                aug[r][c] = sub_mod(aug[r][c], prod, p);
             }
-            let prod = mul_mod(factor, rhs[pivot_row], p);
-            rhs[r] = sub_mod(rhs[r], prod, p);
         }
+
+        pivot_cols.push(col);
         pivot_row += 1;
-        if pivot_row == cols {
-            break;
-        }
     }
 
-    if pivot_row < cols {
+    if pivot_cols.len() < cols {
         return None;
     }
 
     let mut solution = vec![0u128; cols];
-    for i in 0..cols {
-        solution[i] = rhs[i] % p;
+    for (row, &col) in pivot_cols.iter().enumerate() {
+        solution[col] = aug[row][cols] % p;
     }
+
     Some(solution)
 }
 

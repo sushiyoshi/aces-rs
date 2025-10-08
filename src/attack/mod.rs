@@ -71,10 +71,18 @@ pub fn run_attack<R: Rng>(
         samples.push(project_cipher(chan, &ct, msg_mod));
     }
 
-    let mut matrix: Vec<Vec<u128>> = samples.iter().map(|s| s.a.clone()).collect();
-    let mut rhs: Vec<u128> = samples.iter().map(|s| s.y).collect();
-    let secret_image = gaussian_elimination_mod_p(&mut matrix, &mut rhs, chan.p, chan.dim)
+    let matrix: Vec<Vec<u128>> = samples.iter().map(|s| s.a.clone()).collect();
+    let rhs: Vec<u128> = samples.iter().map(|s| s.y).collect();
+    let secret_image = gaussian_elimination_mod_p(&matrix, &rhs, chan.p, chan.dim)
         .context("linear system is rank deficient; try more samples")?;
+
+    for sample in &samples {
+        let dot = dot_mod_p(&sample.a, &secret_image, chan.p);
+        ensure!(
+            dot == sample.y,
+            "recovered secret image does not satisfy collected sample"
+        );
+    }
 
     Ok(AttackResult {
         secret_image,
