@@ -84,6 +84,11 @@ impl Aces {
         &self.x_eval
     }
 
+    /// Access the public arithmetic channel parameters.
+    pub fn channel(&self) -> &ArithChannel {
+        &self.chan
+    }
+
     /// Encrypt a message m ∈ ℤ_p  →  (Cipher, noise_vector)
     pub fn encrypt<R: Rng>(&self, m: u128, rng: &mut R) -> Cipher {
         // Verify message is within bounds

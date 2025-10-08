@@ -25,6 +25,30 @@ cargo run --release
 
 ---
 
+## Checking Git permissions for PRs
+
+If you cannot push a branch or open a pull request, verify your Git remotes and
+credentials with the helper script:
+
+```bash
+./scripts/check_git_permissions.sh [remote] [branch]
+```
+
+* `remote` defaults to `origin` if omitted.
+* `branch` defaults to the currently checked out branch.
+
+When no remote is configured, add one first:
+
+```bash
+git remote add origin https://github.com/<your-account>/aces-rs.git
+```
+
+The script performs a read test (`git ls-remote`) and a dry-run push. If either
+step fails, follow the remediation hints that are printed to fix your
+authentication (for example, updating your HTTPS token permissions or SSH key).
+
+---
+
 ## Benchmark results
 
 All timings collected on a **MacBook Pro 14-inch (M2 Pro, 10-core CPU / 16 GB RAM)**

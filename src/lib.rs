@@ -9,10 +9,11 @@ pub mod polynomial;
 pub mod cipher;
 pub mod arith_channel;
 pub mod scheme;
+pub mod attack;
 pub mod algebra;
 pub mod refresher;
-pub mod rand_iso; 
-pub mod ntt;          
+pub mod rand_iso;
+pub mod ntt;
 
 pub use arith_channel::ArithChannel;
 pub use cipher::Cipher;
